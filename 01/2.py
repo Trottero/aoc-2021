@@ -12,8 +12,8 @@ c = 0
 last = 0
 for f, s, t in zipped:
     current = f + s + t
-    if (f + s + t) > last:
+    if current > last:
         c += 1
-    last = f + s + t
+    last = current
 
 print(c - 1)
