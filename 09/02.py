@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 with open('./09/data.txt', 'r') as f:
     data = f.readlines()
@@ -11,6 +12,8 @@ data = np.array(d)
 
 print(len(data))
 print(data[0])
+
+start = time.perf_counter()
 
 
 def is_local_minima(pt, data):
@@ -84,3 +87,5 @@ for n in largest:
     s *= n
 
 print(s)
+
+print('Time taken: ', (time.perf_counter() - start) * 1000, 'ms')
