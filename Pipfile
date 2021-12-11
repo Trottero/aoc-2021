@@ -8,6 +8,7 @@ numpy = "*"
 pandas = "*"
 autopep8 = "*"
 scipy = "*"
+tqdm = "*"
 
 [dev-packages]
 
