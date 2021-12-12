@@ -9,6 +9,7 @@ pandas = "*"
 autopep8 = "*"
 scipy = "*"
 tqdm = "*"
+networkx = "*"
 
 [dev-packages]
 
