@@ -27,8 +27,6 @@ def double_small(route):
 neighbours = G.neighbors('start')
 routes = [['start']]
 
-done_in_route = {}
-
 print(routes)
 
 routes_expanded = True

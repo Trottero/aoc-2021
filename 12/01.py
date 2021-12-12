@@ -11,8 +11,6 @@ print(G)
 neighbours = G.neighbors('start')
 routes = [['start']]
 
-done_in_route = {}
-
 print(routes)
 
 routes_expanded = True
