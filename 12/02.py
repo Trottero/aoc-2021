@@ -1,9 +1,12 @@
 import numpy as np
 import networkx as nx
 from collections import Counter
+import time
 
 edgelist = np.loadtxt('./12/data.txt', delimiter='-', dtype=str)
 print(len(edgelist))
+
+start = time.perf_counter()
 
 G = nx.from_edgelist(edgelist)
 
@@ -49,3 +52,4 @@ while routes_expanded:
         routes.pop(i)
 
 print(len(routes))
+print('Time taken: ', (time.perf_counter() - start) * 1000, 'ms')
