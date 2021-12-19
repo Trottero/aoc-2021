@@ -1,107 +1,179 @@
 import numpy as np
+import copy
+import tqdm
 
-with open('./17/data.txt', 'r') as f:
-    data = f.readlines()[0].split(' ')[-2:]
-
-data[0] = data[0][:-1]
-
-data = [[int(co) for co in c.split('=')[1].split('..')] for c in data]
+data = np.loadtxt('./18/data.txt', dtype=object)
 
 print(data)
 
-x1, x2 = data[0]
-y1, y2 = data[1]
+
+class Node():
+    def __init__(self, left=None, right=None, value=None, parent=None):
+        self.set_left(left)
+        self.set_right(right)
+        self.value = value
+        self.parent = parent
+
+    pass
+
+    def preorder(self):
+        if self.left is None and self.right is None:
+            return str(self.value)
+        return f'[{self.left.preorder()},{self.right.preorder()}]'
+
+    def explode(self, depth=0, root_left=True, root_right=True):
+        if self.left is None and self.right is None:
+            return depth > 4, False
+
+        # Non terminal, continue traversing
+        left_explode, already_exploded = self.left.explode(depth + 1, root_left, False)
+        if already_exploded:
+            return False, True
+        right_explode, already_exploded = self.right.explode(depth + 1, False, root_right)
+        if already_exploded:
+            return False, True
+
+        if left_explode and right_explode:
+            # Both left and right al child nodes
+            if not root_left:
+                sibling = self.get_left_sibling()
+                sibling.value += self.left.value
+            if not root_right:
+                sibling = self.get_right_sibling()
+                sibling.value += self.right.value
+
+            self.value = 0
+            self.left = None
+            self.right = None
+
+        return False, left_explode or right_explode
+
+    def split(self):
+        if self.left is None and self.right is None:
+            # Terminal node, check if we should split
+            if self.value < 10:
+                return False
+            # Split the node
+            self.set_left(Node(value=self.value // 2))
+            self.set_right(Node(value=(self.value + 1) // 2))
+            self.value = None
+            return True
+
+        # Non terminal, continue traversing
+        if self.left.split():
+            return True
+        return self.right.split()
+
+    def set_left(self, left):
+        self.left = left
+        if self.left is not None:
+            self.left.parent = self
+
+    def set_right(self, right):
+        self.right = right
+        if self.right is not None:
+            self.right.parent = self
+
+    def get_left_sibling(self):
+        node = self
+        prev = self
+        while True:
+            if node.parent is None:
+                return None
+            node = node.parent
+            if node.right is prev:
+                return node.left.get_right_most()
+            prev = node
+
+    def get_right_sibling(self):
+        node = self
+        prev = self
+        while True:
+            if node.parent is None:
+                return None
+            node = node.parent
+            if node.left == prev:
+                return node.right.get_left_most()
+            prev = node
+
+    def get_left_most(self):
+        if self.left is None:
+            return self
+        return self.left.get_left_most()
+
+    def get_right_most(self):
+        if self.right is None:
+            return self
+        return self.right.get_right_most()
+
+    def reduce(self):
+        reduced = True
+        while reduced:
+            reduced = False
+            _, reduced = self.explode()
+            if reduced:
+                continue
+            reduced = self.split()
+
+    def magnitude(self):
+        if self.left is None and self.right is None:
+            return self.value
+        return 3*self.left.magnitude() + 2 * self.right.magnitude()
+
+    def __add__(self, node):
+        return Node(left=self, right=node)
+
+    def __eq__(self, obj):
+        return isinstance(obj, Node) and self.preorder() == obj.preorder()
+
+    def __ne__(self, obj):
+        return not self == obj
 
 
-def simulate_x(initial_velocity):
-    probe_x = 0
-    drag = 0
-    velocity = initial_velocity
-    steps = []
-    while probe_x <= x2:
-        # Check if probe x lands into area
-        if probe_x >= x1 and probe_x <= x2:
-            steps.append(drag)
-            if velocity == 0:
-                return steps, True
-        if velocity == 0:
-            return steps, False
+def parse_snail_number(part, parent=None):
+    i = 0
+    while part[i] == ',' or part[i] == ']':
+        i += 1
 
-        velocity = max(initial_velocity - drag, 0)
-        probe_x += velocity
-        drag += 1
+    c = part[i]
+    if c.isdigit():
+        return Node(value=int(c), parent=parent), i + 1
 
-    return steps, False
+    if c == '[':
+        node = Node(parent=parent)
+        i += 1
+        # Find left subtree
+        left, skip = parse_snail_number(part[i:], node)
+        i += skip + 1
+        right, skip = parse_snail_number(part[i:], node)
 
+        node.set_left(left)
+        node.set_right(right)
 
-def simulate_y(initial_velocity):
-    probe_y = 0
-    drag = 0
-    velocity = initial_velocity
-    steps = []
-    while True:
-        # Check if probe y lands into area
-        if probe_y >= min(y1, y2) and probe_y <= max(y1, y2):
-            steps.append(drag)
+        return node, i + skip
 
-        if velocity < 0 and probe_y < min(y1, y2):
-            return steps
-
-        velocity = initial_velocity - drag
-
-        probe_y += velocity
-        drag += 1
+    return None
 
 
-def compute_top_height(initial_y):
-    return np.sum([initial_y - i for i in range(0, initial_y)])
+max = 0
+for number1 in tqdm.tqdm(data):
+    for number2 in data:
+        sn1, _ = parse_snail_number(number1)
+        sn2, _ = parse_snail_number(number2)
+        if sn1 == sn2:
+            continue
+        sn3 = sn1 + sn2
+        sn3.reduce()
+        sn3mag = sn3.magnitude()
+        if sn3mag > max:
+            max = sn3mag
 
+        sn1, _ = parse_snail_number(number1)
+        sn2, _ = parse_snail_number(number2)
+        sn3 = sn2 + sn1
+        sn3.reduce()
+        sn3mag = sn3.magnitude()
+        if sn3mag > max:
+            max = sn3mag
 
-feasible_steps = {'any_step_past': []}
-x_solutions = []
-potential_x = 1
-
-while potential_x < x2 + 1:
-    steps, special = simulate_x(potential_x)
-    if len(steps) > 0:
-        x_solutions.append(potential_x)
-        for step in steps:
-            if step not in feasible_steps.keys():
-                feasible_steps[step] = {'x': [], 'y': []}
-            feasible_steps[step]['x'].append(potential_x)
-
-        if special:
-            feasible_steps['any_step_past'].append((potential_x, np.max(steps)))
-
-    potential_x += 1
-
-print(x_solutions)
-
-print(feasible_steps)
-
-y_solutions = []
-potential_y = -abs(min(y1, y2))
-
-combinations = []
-
-while potential_y < abs(min(y1, y2) * 10):
-    steps = simulate_y(potential_y)
-    if len(steps) > 0:
-        y_solutions.append(potential_y)
-        for step in steps:
-            if step in feasible_steps.keys():
-                for x in feasible_steps[step]['x']:
-                    combinations.append((x, potential_y))
-
-            # Also check if its on the any step past list
-            for x, stepy in feasible_steps['any_step_past']:
-                if step > stepy:
-                    combinations.append((x, potential_y))
-    potential_y += 1
-
-print(y_solutions)
-print(compute_top_height(y_solutions[-1]))
-
-print()
-print(list(sorted(combinations, key=lambda x: x[0])))
-print(len(set(combinations)))
+print(max)
