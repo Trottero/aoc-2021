@@ -3,6 +3,10 @@ import numpy as np
 import pprint
 import networkx as nx
 import tqdm
+from multiprocessing import Pool, TimeoutError
+import time
+import os
+from tqdm.contrib.concurrent import process_map
 
 # Use vectors,
 # Every beacon has a relation to other beacons
@@ -64,34 +68,6 @@ def rotate_patterns(patterns, xrot, yrot, zrot):
     return rotations
 
 
-# Parse data
-with open('./19/data.txt', 'r') as f:
-    lines = f.readlines()
-
-    scanners = []
-    scanner_beacons = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith('---'):
-            continue
-        if line == '':
-            scanners.append(scanner_beacons)
-            scanner_beacons = []
-            continue
-        beacon = np.fromstring(line, dtype=int, sep=',')
-        scanner_beacons.append(beacon)
-    scanners.append(scanner_beacons)
-    scanners = [np.array(beacons) for beacons in scanners]
-
-print('No. scanners: ', len(scanners))
-# print('Example scanner: \n', scanners[0])
-# print('Rotation x=90: \n', np.round(scanners[0] @ get_x_matrix(180)))
-
-
-scanner_patterns = get_patterns(scanners[0])
-# print('Example scanner patterns: ', scanner_patterns)
-
-
 def search_overlap(pattern1, pattern2):
     # Find overlaps between two sets of patterns by rotating the second set around.
     rots = [0, 90, 180, 270]
@@ -127,74 +103,93 @@ def overlap_count(scanner1_patterns, scanner2_patterns):
     return len(similar_beacons), similar_beacons
 
 
-G = nx.DiGraph()
+def overlap_wrapper(arg):
+    p1, p2, i, j = arg
+    overlapping, offset, rot = search_overlap(p1, p2)
+    return overlapping, offset, rot, i, j
 
-# Key dependency a -> b
-# Value relative rotation and position
-links = {}
-for i, scanner1 in tqdm.tqdm(enumerate(scanners), total=len(scanners)):
-    for j, scanner2 in enumerate(scanners):
-        if i == j:
-            continue
-        sp1 = get_patterns(scanner1)
-        sp2 = get_patterns(scanner2)
-        overlapping, offset, rot = search_overlap(sp1, sp2)
+
+if __name__ == '__main__':
+    # Parse data
+    with open('./19/data.txt', 'r') as f:
+        lines = f.readlines()
+
+        scanners = []
+        scanner_beacons = []
+        for line in lines:
+            line = line.strip()
+            if line.startswith('---'):
+                continue
+            if line == '':
+                scanners.append(scanner_beacons)
+                scanner_beacons = []
+                continue
+            beacon = np.fromstring(line, dtype=int, sep=',')
+            scanner_beacons.append(beacon)
+        scanners.append(scanner_beacons)
+        scanners = [np.array(beacons) for beacons in scanners]
+
+    print('No. scanners: ', len(scanners))
+
+    # Generate multiprocessing args
+    args = []
+    for i, scanner1 in enumerate(scanners):
+        for j, scanner2 in enumerate(scanners):
+            if i == j:
+                continue
+            args.append((get_patterns(scanner1), get_patterns(scanner2), i, j))
+
+    results = process_map(overlap_wrapper, args, max_workers=16, chunksize=10)
+
+    # Key dependency a -> b
+    # Value relative rotation and position
+    links = {}
+    G = nx.DiGraph()
+    for overlapping, offset, rot, i, j in results:
         if overlapping is not None:
-            # print('Found overlap between scanners: ', i, ' and ', j)
-            # print('beacons: ', overlapping)
-            # print('Distance: ', offset)
-            # print('Rotation: ', rot)
             links[(i, j)] = (np.array(offset), rot)
             G.add_edge(i, j)
 
-relative_to_zero = {}
-rotated_scanners = []
-for scanner in range(len(scanners)):
-    if scanner == 0:
-        relative_to_zero[scanner] = np.array([0, 0, 0])
-        rotated_scanners.append(scanners[scanner])
-        continue
+    relative_to_zero = {}
+    rotated_scanners = []
+    for scanner in range(len(scanners)):
+        if scanner == 0:
+            relative_to_zero[scanner] = np.array([0, 0, 0])
+            rotated_scanners.append(scanners[scanner])
+            continue
 
-    path = nx.algorithms.shortest_path(G, source=scanner, target=0)
+        path = nx.algorithms.shortest_path(G, source=scanner, target=0)
 
-    # if len(path) == 2:
-    #     # Only one link, no need to calculate relative position
-    #     pos, rot = links[(path[0], path[1])]
-    #     relative_to_zero[scanner] = np.array(pos)
-    #     rotated_scanners.append(rotate(scanners[scanner], *rot) + pos)
-    #     continue
+        # Calculate relative position to zero
+        current_coord, rot = links[(path[1], path[0])]
+        rotated_beacons = rotate(scanners[scanner], *rot)
+        for i, node in enumerate(path[1:-1]):
+            offset, (x, y, z) = links[(path[i + 2], node)]
+            current_coord = rotate(current_coord, x, y, z) + offset
+            rotated_beacons = rotate(rotated_beacons, x, y, z)
+        relative_to_zero[scanner] = current_coord
+        rotated_scanners.append(rotated_beacons)
 
-    # Calculate relative position to zero
-    current_coord, rot = links[(path[1], path[0])]
-    rotated_beacons = rotate(scanners[scanner], *rot)
-    for i, node in enumerate(path[1:-1]):
-        offset, (x, y, z) = links[(path[i + 2], node)]
-        current_coord = rotate(current_coord, x, y, z) + offset
-        rotated_beacons = rotate(rotated_beacons, x, y, z)
-    relative_to_zero[scanner] = current_coord
-    rotated_scanners.append(rotated_beacons)
+    pprint.pprint(relative_to_zero)
 
-pprint.pprint(relative_to_zero)
+    # print(np.round(
+    #     # Take value between 4 to 2, multiply by value 1 to 4 and add 1 to 4 to transpose to 1
+    #     (np.array([168.0, -1125.0, 72.0]) @ get_y_matrix(270) @ get_z_matrix(90) + [88.0, 113.0, -1104.0])
+    #     # Bring from 1 to 0
+    #     @ get_y_matrix(180) + [68, -1246, -43]))
 
-# print(np.round(
-#     # Take value between 4 to 2, multiply by value 1 to 4 and add 1 to 4 to transpose to 1
-#     (np.array([168.0, -1125.0, 72.0]) @ get_y_matrix(270) @ get_z_matrix(90) + [88.0, 113.0, -1104.0])
-#     # Bring from 1 to 0
-#     @ get_y_matrix(180) + [68, -1246, -43]))
+    # Say 4 -> 2 and 1 -> 4 exist
+    # We can transpose 4 -> 1 by doing the following steps:
+    # 1. Bring 4 to 1 by taking rots from 1 -> 4 and applying them to 4
+    # 2. Add the position from 1 -> 4
+    # 3. Bring 1 to 0 by taking rots from 0 -> 1 and applying them to 1
+    # 4. Add the position from 0 -> 1
 
+    # Get all beacons relative to scanner 0
+    relative_beacons = []
+    for i, beacons in enumerate(rotated_scanners):
+        for beacon in beacons:
+            relative_beacons.append(tuple(beacon + relative_to_zero[i]))
 
-# Say 4 -> 2 and 1 -> 4 exist
-# We can transpose 4 -> 1 by doing the following steps:
-# 1. Bring 4 to 1 by taking rots from 1 -> 4 and applying them to 4
-# 2. Add the position from 1 -> 4
-# 3. Bring 1 to 0 by taking rots from 0 -> 1 and applying them to 1
-# 4. Add the position from 0 -> 1
-
-# Get all beacons relative to scanner 0
-relative_beacons = []
-for i, beacons in enumerate(rotated_scanners):
-    for beacon in beacons:
-        relative_beacons.append(tuple(beacon + relative_to_zero[i]))
-
-relative_beacons = list(set(relative_beacons))
-print(len(relative_beacons))
+    relative_beacons = list(set(relative_beacons))
+    print(len(relative_beacons))
