@@ -150,12 +150,19 @@ if __name__ == '__main__':
             links[(i, j)] = (np.array(offset), rot)
             G.add_edge(i, j)
 
+    nx.readwrite.write_edgelist(G, './19/graph.txt')
+
+    known_unique = 0
     relative_to_zero = {}
     rotated_scanners = []
     for scanner in range(len(scanners)):
         if scanner == 0:
             relative_to_zero[scanner] = np.array([0, 0, 0])
-            rotated_scanners.append(scanners[scanner])
+            rotated_scanners.append((scanners[scanner], scanner))
+            continue
+
+        if scanner not in G.nodes():
+            known_unique += len(scanners[scanner])
             continue
 
         path = nx.algorithms.shortest_path(G, source=scanner, target=0)
@@ -168,7 +175,7 @@ if __name__ == '__main__':
             current_coord = rotate(current_coord, x, y, z) + offset
             rotated_beacons = rotate(rotated_beacons, x, y, z)
         relative_to_zero[scanner] = current_coord
-        rotated_scanners.append(rotated_beacons)
+        rotated_scanners.append((rotated_beacons, scanner))
 
     pprint.pprint(relative_to_zero)
 
@@ -187,9 +194,9 @@ if __name__ == '__main__':
 
     # Get all beacons relative to scanner 0
     relative_beacons = []
-    for i, beacons in enumerate(rotated_scanners):
+    for beacons, scannerid in rotated_scanners:
         for beacon in beacons:
-            relative_beacons.append(tuple(beacon + relative_to_zero[i]))
+            relative_beacons.append(tuple(beacon + relative_to_zero[scannerid]))
 
     relative_beacons = list(set(relative_beacons))
-    print(len(relative_beacons))
+    print(len(relative_beacons) + known_unique)
