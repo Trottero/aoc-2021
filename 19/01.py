@@ -76,7 +76,7 @@ def search_overlap(pattern1, pattern2):
             for zrot in rots:
                 rotated_pattern2 = rotate_patterns(pattern2, xrot, yrot, zrot)
                 count, similar_beacons = overlap_count(pattern1, rotated_pattern2)
-                if count >= 12:
+                if count >= 11:
                     # Found enough similar beacons
                     # Calculate the second scanners position based on the first
                     (x1, y1, z1), (x2, y2, z2) = similar_beacons[0]
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     # Key dependency a -> b
     # Value relative rotation and position
     links = {}
-    G = nx.DiGraph()
+    G = nx.Graph()
     for overlapping, offset, rot, i, j in results:
         if overlapping is not None:
             links[(i, j)] = (np.array(offset), rot)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
             continue
 
         if scanner not in G.nodes():
-            known_unique += len(scanners[scanner])
+            known_unique += scanners[scanner].shape[0]
             continue
 
         path = nx.algorithms.shortest_path(G, source=scanner, target=0)
@@ -200,3 +200,5 @@ if __name__ == '__main__':
 
     relative_beacons = list(set(relative_beacons))
     print(len(relative_beacons) + known_unique)
+
+    print(nx.is_connected(G))
