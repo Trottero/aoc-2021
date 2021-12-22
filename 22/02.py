@@ -2,7 +2,9 @@ import numpy as np
 from pprint import pprint
 import tqdm
 import matplotlib.pyplot as plt
+import matplotlib
 import matplotlib.patches as patches
+from matplotlib.collections import LineCollection
 
 with open('./22/data.txt', 'r') as f:
     data = f.readlines()
@@ -14,6 +16,19 @@ for instruction, dims in [l.split(' ') for l in data]:
     dims = [d[2:] for d in dims.split(',')]
     (x1, x2), (y1, y2), (z1, z2) = [[d for d in a.split('..')] for a in dims]
     procedures.append((instruction, (int(x1), int(x2) + 1, int(y1), int(y2) + 1, int(z1), int(z2) + 1)))
+
+x = []
+y = []
+z = []
+for instruction, box in procedures:
+    x1, x2, y1, y2, z1, z2 = box
+    x.extend([x1, x2])
+    y.extend([y1, y2])
+    z.extend([z1, z2])
+
+minx, maxx = min(x), max(x)
+miny, maxy = min(y), max(y)
+minz, maxz = min(z), max(z)
 
 print(procedures)
 
@@ -28,9 +43,11 @@ def get_box_lines(box):
     return x, y, z
 
 
-def plot_boxes(boxes, highlights=None):
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
+fig = plt.figure()
+ax = plt.axes(projection='3d')
+
+
+def plot_boxes(boxes, highlights=None, save=False, plt_name=None):
     for box in boxes:
         for x, y, z in zip(*get_box_lines(box)):
             ax.plot(x, y, z, 'grey')
@@ -42,7 +59,15 @@ def plot_boxes(boxes, highlights=None):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    plt.show()
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(miny, maxy)
+    ax.set_zlim(minz, maxz)
+
+    if save:
+        plt.savefig('22/figs/{}.png'.format(plt_name))
+        plt.gca().cla()
+    else:
+        plt.show()
 
 
 def box_size(box):
@@ -150,11 +175,16 @@ def count_on(regions):
 
 regions = {}
 
+plt_name = 1
+boxes = []
 for instruction, box in procedures:
     # Check if the box collides with any other known box
     updates = {}
     to_remove = []
     print(instruction, box)
+    # plot_boxes(boxes, [([box], 'blue')], save=True, plt_name=plt_name)
+    # boxes.append(box)
+    plt_name += 1
     for reg_box, reg_val in regions.items():
         overlap = calculate_overlap_region(reg_box, box)
         if overlap is None:
@@ -180,8 +210,6 @@ for instruction, box in procedures:
         regions[box] = 0
 
     print(count_on(regions))
-
-    # plot_boxes(regions.keys())
 
 print(box_size((11, 13, 11, 13, 11, 13)))
 pprint(regions)
