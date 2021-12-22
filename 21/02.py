@@ -1,70 +1,73 @@
 import numpy as np
 from pprint import pprint
+from tqdm import tqdm
 
 with open('./21/data.txt', 'r') as f:
     data = f.readlines()
     data = [int(l.strip()[-1]) for l in data]
 
-# We needs to calculate the number of rolls that would be required for all possbilities to get to 21
+board = np.arange(1, 11)
+
+transpositions = {}
+
+# All the different possbilities for 3 rolls in a row
+# And their counts
+roll_result = {}
+for one in range(1, 4):
+    for two in range(1, 4):
+        for three in range(1, 4):
+            s = one + two + three
+            if s not in roll_result:
+                roll_result[s] = 0
+
+            roll_result[s] += 1
+
+pprint(roll_result)
+print(sum(roll_result.values()))
 
 
-# 22 elements as score as the 22th element keeps all ones above 21
-track = {}
-# Throws # pos # score -> count
+def playout(p1pos, p1score, p2pos, p2score, move):
+    # Check if the current state is not a transposition of another state
+    if (p1pos, p1score, p2pos, p2score, move) in transpositions.keys():
+        return transpositions[(p1pos, p1score, p2pos, p2score, move)]
 
-# Set the starting score and position of player 1
-track[(0, 3, 0)] = 9
+    # We are required to evaluate sub tree
 
-# Throws and counts
-throws_counts = {}
+    # Terminal node
+    if p1score >= 21:
+        # P1 has won
+        return (1, 0)
+    if p2score >= 21:
+        # P2 has won
+        return (0, 1)
 
-scores = np.arange(1, 11)
+    # Track the amount of wins for each player
+    p1wins = 0
+    p2wins = 0
 
-# Calculate the number of throws for each position and score
-terminated_dims = 0
-while sum(track.values()) != 0:
-    next = {}
-    # Update every entry
-    for (throws, pos, score), count in track.items():
-        # 2, 5, 11, 17, 23
-        # dims = 3**(throws * 6 + 2)
-        if throws == 0:
-            dims = 1
+    for pos_increase, count in roll_result.items():
+        if move % 2 == 0:
+            # Calculate the new score for player 1
+            player1pos = (p1pos + pos_increase) % 10
+            newp1wins, newp2wins = playout(player1pos, p1score + board[player1pos], p2pos, p2score, move + 1)
+            p1wins += (newp1wins * count)
+            p2wins += (newp2wins * count)
         else:
-            dims = 729
+            # Calculate the new score for player 2
+            player2pos = (p2pos + pos_increase) % 10
+            newp1wins, newp2wins = playout(p1pos, p1score, player2pos, p2score + board[player2pos], move + 1)
+            p1wins += (newp1wins * count)
+            p2wins += (newp2wins * count)
 
-        # We need to account for finished dims.
+    # We have evaluated subtree store it for future use.
+    transpositions[(p1pos, p1score, p2pos, p2score, move)] = (p1wins, p2wins)
 
-        # dims = 3**(throws * 6 + 2)
-        # Dims grow with a factor of 729...
+    return (p1wins, p2wins)
 
-        # Calculate next states
-        pos1 = (pos + 1) % 10
-        pos2 = (pos + 2) % 10
-        pos3 = (pos + 3) % 10
 
-        score1 = score + scores[pos1]
-        score2 = score + scores[pos2]
-        score3 = score + scores[pos3]
+# Pos is 0-indexed and thus we need to remove one.
+p1, p2 = playout(7, 0, 4, 0, 0)
 
-        terminated_dims = 0
-        added = [(throws + 1, pos1, score1), (throws + 1, pos2, score2), (throws + 1, pos3, score3)]
-        for (a_throws, a_pos, a_score) in added:
-            if a_score >= 21:
-                if a_throws not in throws_counts:
-                    throws_counts[a_throws] = 0
-                throws_counts[a_throws] += count * dims
-            else:
-                if (a_throws, a_pos, a_score) not in next:
-                    next[(a_throws, a_pos, a_score)] = 0
-                next[(a_throws, a_pos, a_score)] += count * dims
-
-    print(dims, terminated_dims)
-
-    track = next
-
-print(throws_counts)
-
-s = sum(throws_counts.values())
-print(s)
-print(444356092776315 + 341960390180808)
+print(p1, p2)
+print(max(p1, p2))
+assert p1 + p2 == 444356092776315 + 341960390180808
