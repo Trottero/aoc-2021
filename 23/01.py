@@ -2,24 +2,35 @@ import numpy as np
 from pprint import pprint
 import tqdm
 import sys
+import networkx as nx
 
 hallway = [''] * 7
 hallway[4] = 'Z'
 print(hallway)
-rooms = [['B', 'A'], ['C', 'D'], ['B', 'C'], ['D', 'A']]
+rooms = ['B', 'A', 'C', 'D', 'B', 'C', 'D', 'A']
 
 #   #############
-#   #01.2.3.4.56#
-#   ###B#C#B#D###
-#     #A#D#C#A#
+#   #1234567890-#
+#   ###.#.#.#.###
+#     #.#.#.#.#
 #     #########
 
+G = nx.Graph()
+for i in range(1, 11):
+    G.add_edge(i, i+1)
+
+room_edges = [(3, 12), (12, 13), (5, 14), (14, 15), (7, 16), (16, 17), (9, 18), (18, 19)]
+for u, v in room_edges:
+    G.add_edge(u, v)
+
+invalid_end_positions = [3, 5, 7, 9]
+room_nodes = [12, 13, 14, 15, 16, 17, 18, 19]
 
 right_pos = {
-    'A': 0,
-    'B': 1,
-    'C': 2,
-    'D': 3,
+    'A': [12, 13],
+    'B': [14, 15],
+    'C': [16, 17],
+    'D': [18, 19],
 }
 
 cost = {
@@ -29,68 +40,43 @@ cost = {
     'D': 1000,
 }
 
+atts = {n: '' for n in range(1, 13)}
+for i, v in enumerate(rooms):
+    atts[i + 12] = v
 
-def get_possible_moves(hallway, rooms):
-    # Pod, newpos, cost
-    available_moves = []
-    for room_id, room in enumerate(rooms):
-        # Do not consider completed rooms
-        if room[0] != '' and room[1] != '' and room_id == right_pos[room[0]] and room_id == right_pos[room[1]]:
-            continue
+nx.set_node_attributes(G, atts, name="amph")
 
-        if room[0] != '':
-            to_move = room[0]
-            add = 0
-        else:
-            to_move = room[1]
-            add = 1
+print(G.nodes[12]['amph'])
 
-        # Get all available moves to the right
-        for distance, v in list(enumerate(hallway[room_id + 2:])):
-            # only count empty hallways
-            if v != '':
-                break
-            destination_room = distance + room_id + 2
-            if destination_room == 6:
-                available_moves.append((to_move, destination_room, (distance * 2 + 1 + add) * cost[to_move]))
-            else:
-                available_moves.append((to_move, destination_room, (distance * 2 + 2 + add) * cost[to_move]))
-        # Get all available moves to the left
-        for distance, v in list(enumerate(hallway[:room_id + 2][::-1])):
-            # only count empty hallways
-            if v != '':
-                break
-            destination_room = room_id + 2 - distance - 1
-            if destination_room == 0:
-                available_moves.append((to_move, destination_room, (distance * 2 + 1 + add) * cost[to_move]))
-            else:
-                available_moves.append((to_move, destination_room, (distance * 2 + 2 + add) * cost[to_move]))
+min_score = 17_000
 
-        for hallway_index, v in enumerate(hallway):
-            if v == '':
+
+def get_possible_paths(G: nx.Graph):
+    for amph, correct_nodes in right_pos.items():
+        nodes = [x for x, y in G.nodes(data=True) if y['amph'] == amph]
+        if all([c in correct_nodes for c in nodes]):
+            continue  # All correct
+        for node in nodes:
+            # Check if node isnt already at the bottom of a room.
+            if node == right_pos[amph][1]:
                 continue
-            if hallway_index >= right_pos[v] + 2:
-                # We have to move to the left
-                if hallway_index == right_pos[v] + 2:
-                    available_moves.append((v, hallway_index, (hallway_index - right_pos[v] - 1) * cost[v]))
-            else:
-                # Move to the right
+            paths = nx.single_source_dijkstra(G, node)[1]
+            # Prune paths which contain nodes which are taken
+            print(paths)
 
-                pass
-    return available_moves
-
-
-#01#2#3#4#56#
-#...A.......#
-###B#C#B#D###
-  #A#D#C#A#
-  #2#3#4#5#
-
-min_score = sys.maxsize
-
-
-def solve(hallway, rooms, score, moves):
+            cant_pass_through = [x for x, y in G.nodes(data=True) if y['amph'] != '']
+            # If amph is moving from room to hallway / room
+            if node in room_nodes:
+                # Cant end on invalid positions and also not in the incorrect room
+                cant_end_on = invalid_end_positions
+            print()
     pass
 
 
-print(get_possible_moves(hallway, rooms))
+get_possible_paths(G)
+
+
+def solve(G, cost):
+    if cost > min_score:
+        return
+    # Calculate all possible paths
